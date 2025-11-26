@@ -12,6 +12,11 @@ public class PanelDisco extends JPanel {
     private SistemaArchivos sistema;
     private int tamañoBloque;
     private int bloquesAncho;
+    private JLabel lblTotal;
+    private JLabel lblOcupados;
+    private JLabel lblLibres;
+    private JLabel lblPorcentaje;
+    private JLabel lblPolítica;
 
     public PanelDisco(SistemaArchivos sistema) {
         this.sistema = sistema;
@@ -38,6 +43,8 @@ public class PanelDisco extends JPanel {
         split.setDividerLocation(400);
 
         add(split, BorderLayout.CENTER);
+
+        actualizarInformacionDisco();
     }
 
     private void dibujarDisco(Graphics2D g) {
@@ -82,11 +89,11 @@ public class PanelDisco extends JPanel {
         JPanel panel = new JPanel(new GridLayout(5, 1, 5, 5));
         panel.setBorder(BorderFactory.createTitledBorder("Información del Disco"));
 
-        JLabel lblTotal = new JLabel("Total de bloques: 0");
-        JLabel lblOcupados = new JLabel("Bloques ocupados: 0");
-        JLabel lblLibres = new JLabel("Bloques libres: 0");
-        JLabel lblPorcentaje = new JLabel("Ocupación: 0%");
-        JLabel lblPolítica = new JLabel("Política: FIFO");
+        lblTotal = new JLabel("Total de bloques: 0");
+        lblOcupados = new JLabel("Bloques ocupados: 0");
+        lblLibres = new JLabel("Bloques libres: 0");
+        lblPorcentaje = new JLabel("Ocupación: 0%");
+        lblPolítica = new JLabel("Política: FIFO");
 
         panel.add(lblTotal);
         panel.add(lblOcupados);
@@ -94,18 +101,20 @@ public class PanelDisco extends JPanel {
         panel.add(lblPorcentaje);
         panel.add(lblPolítica);
 
-        // Actualizar información
+        return panel;
+    }
+
+    private void actualizarInformacionDisco() {
         Disco disco = sistema.getDisco();
         lblTotal.setText("Total de bloques: " + disco.getTotalBloques());
         lblOcupados.setText("Bloques ocupados: " + disco.getBloquesOcupados());
         lblLibres.setText("Bloques libres: " + disco.getBloquesLibres());
         lblPorcentaje.setText(String.format("Ocupación: %.2f%%", disco.getPercentajeOcupacion()));
         lblPolítica.setText("Política: " + sistema.getPlanificador().getPoliticaActual());
-
-        return panel;
     }
 
     public void actualizar() {
+        actualizarInformacionDisco();
         repaint();
     }
 }
