@@ -5,6 +5,8 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.File;
+import java.io.IOException;
 import modelo.*;
 
 /**
@@ -56,6 +58,8 @@ public class VentanaPrincipal extends JFrame {
         // Crear barra de estado
         JPanel panelInferior = crearPanelInferior();
         add(panelInferior, BorderLayout.SOUTH);
+
+        actualizarPantalla();
 
         setVisible(true);
     }
@@ -259,17 +263,50 @@ public class VentanaPrincipal extends JFrame {
         panelTabla.actualizar();
         panelProcesos.actualizar();
 
-        usuarioLabel.setText("Usuario: " + sistema.getUsuarioActual() + 
+        usuarioLabel.setText("Usuario: " + sistema.getUsuarioActual() +
             " | Modo: " + (sistema.isModoAdministrador() ? "ADMIN" : "USER"));
         estadoLabel.setText("Estado: " + sistema.toString());
     }
 
     private void guardarSistema() {
-        JOptionPane.showMessageDialog(this, "Función de guardar - A implementar");
+        // Permite elegir un archivo y delegar el guardado del estado del sistema
+        JFileChooser selector = new JFileChooser();
+        int resultado = selector.showSaveDialog(this);
+
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            File archivoSeleccionado = selector.getSelectedFile();
+            try {
+                sistema.guardarEstado(archivoSeleccionado);
+                JOptionPane.showMessageDialog(this, "Estado guardado correctamente.");
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this,
+                    "Error al guardar el sistema: " + e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     private void cargarSistema() {
-        JOptionPane.showMessageDialog(this, "Función de cargar - A implementar");
+        // Permite elegir un archivo previamente guardado y recargar el estado
+        JFileChooser selector = new JFileChooser();
+        int resultado = selector.showOpenDialog(this);
+
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            File archivoSeleccionado = selector.getSelectedFile();
+            try {
+                sistema.cargarEstado(archivoSeleccionado);
+                panelArbol.actualizar();
+                panelDisco.actualizar();
+                panelTabla.actualizar();
+                panelProcesos.actualizar();
+                actualizarPantalla();
+                JOptionPane.showMessageDialog(this, "Estado cargado correctamente.");
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this,
+                    "Error al cargar el sistema: " + e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
 }
