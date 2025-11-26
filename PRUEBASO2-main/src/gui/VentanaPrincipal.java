@@ -5,6 +5,8 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.File;
+import java.io.IOException;
 import modelo.*;
 
 /**
@@ -57,6 +59,8 @@ public class VentanaPrincipal extends JFrame {
         JPanel panelInferior = crearPanelInferior();
         add(panelInferior, BorderLayout.SOUTH);
 
+        actualizarPantalla();
+
         setVisible(true);
     }
 
@@ -86,7 +90,7 @@ public class VentanaPrincipal extends JFrame {
 
         crearDirectorio.addActionListener(e -> mostrarDialogoCrearDirectorio());
         crearArchivo.addActionListener(e -> mostrarDialogoCrearArchivo());
-        eliminarArchivo.addActionListener(e -> mostrarDialogoEliminarArchivo());
+        eliminarArchivo.addActionListener(e -> eliminarArchivoSeleccionado());
 
         menuEdicion.add(crearDirectorio);
         menuEdicion.add(crearArchivo);
@@ -157,11 +161,20 @@ public class VentanaPrincipal extends JFrame {
     private void mostrarDialogoCrearDirectorio() {
         String nombre = JOptionPane.showInputDialog(this, "Nombre del directorio:");
         if (nombre != null && !nombre.isEmpty()) {
-            if (sistema.crearDirectorio(nombre)) {
+            Directorio destino = panelArbol.getDirectorioSeleccionado();
+            sistema.setDirectorioActual(destino);
+
+            if (!sistema.puedeOperarEnDirectorio(destino)) {
+                JOptionPane.showMessageDialog(this,
+                    "No tiene permisos para crear en este directorio.",
+                    "Permiso denegado", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (sistema.crearDirectorio(nombre, destino)) {
                 JOptionPane.showMessageDialog(this, "Directorio creado exitosamente");
                 actualizarPantalla();
             } else {
-                JOptionPane.showMessageDialog(this, "Error al crear directorio", 
+                JOptionPane.showMessageDialog(this, "Error al crear directorio",
                     "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -189,11 +202,21 @@ public class VentanaPrincipal extends JFrame {
                 int tamaño = Integer.parseInt(tamañoField.getText());
                 boolean esPublico = publico.isSelected();
 
-                if (sistema.crearArchivo(nombre, tamaño, esPublico)) {
+                Directorio destino = panelArbol.getDirectorioSeleccionado();
+                sistema.setDirectorioActual(destino);
+
+                if (!sistema.puedeOperarEnDirectorio(destino)) {
+                    JOptionPane.showMessageDialog(this,
+                        "No tiene permisos para crear en este directorio.",
+                        "Permiso denegado", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                if (sistema.crearArchivo(nombre, tamaño, esPublico, destino)) {
                     JOptionPane.showMessageDialog(this, "Archivo creado exitosamente");
                     actualizarPantalla();
                 } else {
-                    JOptionPane.showMessageDialog(this, 
+                    JOptionPane.showMessageDialog(this,
                         "Error al crear archivo. Verifique el espacio disponible.",
                         "Error", JOptionPane.ERROR_MESSAGE);
                 }
@@ -204,16 +227,33 @@ public class VentanaPrincipal extends JFrame {
         }
     }
 
-    private void mostrarDialogoEliminarArchivo() {
-        String nombre = JOptionPane.showInputDialog(this, "Nombre del archivo a eliminar:");
-        if (nombre != null && !nombre.isEmpty()) {
-            if (sistema.eliminarArchivo(nombre)) {
-                JOptionPane.showMessageDialog(this, "Archivo eliminado exitosamente");
-                actualizarPantalla();
-            } else {
-                JOptionPane.showMessageDialog(this, "Error al eliminar archivo", 
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            }
+    /**
+     * Elimina el archivo actualmente seleccionado en la interfaz (árbol o tabla).
+     */
+    private void eliminarArchivoSeleccionado() {
+        Archivo archivoSeleccionado = panelArbol.getArchivoSeleccionado();
+        Directorio directorioSeleccionado = panelArbol.getDirectorioSeleccionado();
+
+        if (archivoSeleccionado == null || directorioSeleccionado == null) {
+            JOptionPane.showMessageDialog(this,
+                "Seleccione un archivo en el árbol para eliminarlo.");
+            return;
+        }
+
+        if (!sistema.puedeOperarArchivo(archivoSeleccionado)) {
+            JOptionPane.showMessageDialog(this,
+                "No tiene permisos para operar sobre este archivo.",
+                "Permiso denegado", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        boolean eliminado = sistema.eliminarArchivo(directorioSeleccionado, archivoSeleccionado);
+        if (eliminado) {
+            JOptionPane.showMessageDialog(this, "Archivo eliminado exitosamente");
+            actualizarPantalla();
+        } else {
+            JOptionPane.showMessageDialog(this, "Error al eliminar archivo",
+                "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -228,8 +268,13 @@ public class VentanaPrincipal extends JFrame {
             sistema.setModoAdministrador(true);
             sistema.setUsuarioActual("admin");
         } else if (opcion == 1) {
+            String usuario = JOptionPane.showInputDialog(this,
+                "Ingrese el nombre de usuario:", sistema.getUsuarioActual());
+            if (usuario == null || usuario.trim().isEmpty()) {
+                return;
+            }
             sistema.setModoAdministrador(false);
-            sistema.setUsuarioActual("usuario");
+            sistema.setUsuarioActual(usuario.trim());
         }
 
         actualizarPantalla();
@@ -259,17 +304,50 @@ public class VentanaPrincipal extends JFrame {
         panelTabla.actualizar();
         panelProcesos.actualizar();
 
-        usuarioLabel.setText("Usuario: " + sistema.getUsuarioActual() + 
+        usuarioLabel.setText("Usuario: " + sistema.getUsuarioActual() +
             " | Modo: " + (sistema.isModoAdministrador() ? "ADMIN" : "USER"));
         estadoLabel.setText("Estado: " + sistema.toString());
     }
 
     private void guardarSistema() {
-        JOptionPane.showMessageDialog(this, "Función de guardar - A implementar");
+        // Permite elegir un archivo y delegar el guardado del estado del sistema
+        JFileChooser selector = new JFileChooser();
+        int resultado = selector.showSaveDialog(this);
+
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            File archivoSeleccionado = selector.getSelectedFile();
+            try {
+                sistema.guardarEstado(archivoSeleccionado);
+                JOptionPane.showMessageDialog(this, "Estado guardado correctamente.");
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this,
+                    "Error al guardar el sistema: " + e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     private void cargarSistema() {
-        JOptionPane.showMessageDialog(this, "Función de cargar - A implementar");
+        // Permite elegir un archivo previamente guardado y recargar el estado
+        JFileChooser selector = new JFileChooser();
+        int resultado = selector.showOpenDialog(this);
+
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            File archivoSeleccionado = selector.getSelectedFile();
+            try {
+                sistema.cargarEstado(archivoSeleccionado);
+                panelArbol.actualizar();
+                panelDisco.actualizar();
+                panelTabla.actualizar();
+                panelProcesos.actualizar();
+                actualizarPantalla();
+                JOptionPane.showMessageDialog(this, "Estado cargado correctamente.");
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this,
+                    "Error al cargar el sistema: " + e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
 }
