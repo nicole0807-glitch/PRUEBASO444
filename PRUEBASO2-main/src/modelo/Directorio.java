@@ -9,14 +9,20 @@ public class Directorio {
     private String nombre;
     private Directorio padreDirectorio;
     private String propietario;
+    private boolean esPublico;
     private LinkedList<Directorio> subdirectorios;  // Sin librerías
     private LinkedList<Archivo> archivos;           // Sin librerías
     private long fechaCreacion;
 
     public Directorio(String nombre, String propietario, Directorio padre) {
+        this(nombre, propietario, padre, true);
+    }
+
+    public Directorio(String nombre, String propietario, Directorio padre, boolean esPublico) {
         this.nombre = nombre;
         this.propietario = propietario;
         this.padreDirectorio = padre;
+        this.esPublico = esPublico;
         this.subdirectorios = new LinkedList<>();
         this.archivos = new LinkedList<>();
         this.fechaCreacion = System.currentTimeMillis();
@@ -35,6 +41,10 @@ public class Directorio {
         return propietario;
     }
 
+    public boolean isEsPublico() {
+        return esPublico;
+    }
+
     public LinkedList<Directorio> getSubdirectorios() {
         return subdirectorios;
     }
@@ -50,6 +60,10 @@ public class Directorio {
     // Setters
     public void setNombre(String nombre) {
         this.nombre = nombre;
+    }
+
+    public void setEsPublico(boolean esPublico) {
+        this.esPublico = esPublico;
     }
 
     // Métodos de gestión de subdirectorios
@@ -114,6 +128,7 @@ public class Directorio {
         return "Directorio{" +
                 "nombre='" + nombre + '\'' +
                 ", propietario='" + propietario + '\'' +
+                ", esPublico=" + esPublico +
                 ", subdirectorios=" + subdirectorios.size() +
                 ", archivos=" + archivos.size() +
                 '}';

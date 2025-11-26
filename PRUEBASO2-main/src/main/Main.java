@@ -10,7 +10,7 @@ import gui.VentanaPrincipal;
  *
  * @author Daniel
  */
-public class main {
+public class Main {
 
     /**
      * @param args the command line arguments

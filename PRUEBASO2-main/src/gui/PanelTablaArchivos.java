@@ -44,8 +44,8 @@ public class PanelTablaArchivos extends JPanel {
     private void actualizarTabla() {
         modeloTabla.setRowCount(0);
 
-        // Obtener todos los archivos recursivamente
-        LinkedList<Archivo> todosLosArchivos = sistema.getRaiz().obtenerTodosLosArchivos();
+        // Obtener archivos visibles según el modo actual
+        LinkedList<Archivo> todosLosArchivos = sistema.obtenerArchivosVisibles();
 
         for (Archivo archivo : todosLosArchivos) {
             Object[] fila = {
