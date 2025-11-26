@@ -161,6 +161,12 @@ public class VentanaPrincipal extends JFrame {
     private void mostrarDialogoCrearDirectorio() {
         String nombre = JOptionPane.showInputDialog(this, "Nombre del directorio:");
         if (nombre != null && !nombre.isEmpty()) {
+            if (!sistema.puedeOperarEnDirectorio(sistema.getDirectorioActual())) {
+                JOptionPane.showMessageDialog(this,
+                    "No tiene permisos para crear en este directorio.",
+                    "Permiso denegado", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             if (sistema.crearDirectorio(nombre)) {
                 JOptionPane.showMessageDialog(this, "Directorio creado exitosamente");
                 actualizarPantalla();
@@ -193,6 +199,13 @@ public class VentanaPrincipal extends JFrame {
                 int tamaño = Integer.parseInt(tamañoField.getText());
                 boolean esPublico = publico.isSelected();
 
+                if (!sistema.puedeOperarEnDirectorio(sistema.getDirectorioActual())) {
+                    JOptionPane.showMessageDialog(this,
+                        "No tiene permisos para crear en este directorio.",
+                        "Permiso denegado", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
                 if (sistema.crearArchivo(nombre, tamaño, esPublico)) {
                     JOptionPane.showMessageDialog(this, "Archivo creado exitosamente");
                     actualizarPantalla();
@@ -221,6 +234,13 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
+        if (!sistema.puedeOperarArchivo(archivoSeleccionado)) {
+            JOptionPane.showMessageDialog(this,
+                "No tiene permisos para operar sobre este archivo.",
+                "Permiso denegado", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         boolean eliminado = sistema.eliminarArchivoPorRuta(rutaSeleccionada);
         if (eliminado) {
             JOptionPane.showMessageDialog(this, "Archivo eliminado exitosamente");
@@ -242,8 +262,13 @@ public class VentanaPrincipal extends JFrame {
             sistema.setModoAdministrador(true);
             sistema.setUsuarioActual("admin");
         } else if (opcion == 1) {
+            String usuario = JOptionPane.showInputDialog(this,
+                "Ingrese el nombre de usuario:", sistema.getUsuarioActual());
+            if (usuario == null || usuario.trim().isEmpty()) {
+                return;
+            }
             sistema.setModoAdministrador(false);
-            sistema.setUsuarioActual("usuario");
+            sistema.setUsuarioActual(usuario.trim());
         }
 
         actualizarPantalla();

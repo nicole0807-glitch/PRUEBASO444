@@ -17,6 +17,8 @@ import java.util.Map;
  * Clase central del sistema de archivos que integra todos los componentes
  */
 public class SistemaArchivos {
+    public enum Modo { ADMIN, USUARIO }
+
     private Disco disco;
     private Directorio raiz;
     private Directorio directorioActual;
@@ -26,7 +28,7 @@ public class SistemaArchivos {
     private LinkedList<Proceso> procesos;
     private int contadorProcesos;
     private int contadorSolicitudes;
-    private boolean modoAdministrador;
+    private Modo modoActual;
     private String usuarioActual;
 
     // Estadísticas
@@ -36,7 +38,7 @@ public class SistemaArchivos {
 
     public SistemaArchivos(int totalBloques, boolean incluirBuffer) {
         this.disco = new Disco(totalBloques);
-        this.raiz = new Directorio("root", "admin", null);
+        this.raiz = new Directorio("root", "admin", null, true);
         this.directorioActual = raiz;
         this.colaIO = new ColaIO();
         this.planificador = new Planificador(Planificador.PoliticaplanificacionDisco.FIFO, totalBloques);
@@ -44,7 +46,7 @@ public class SistemaArchivos {
         this.procesos = new LinkedList<>();
         this.contadorProcesos = 0;
         this.contadorSolicitudes = 0;
-        this.modoAdministrador = true;
+        this.modoActual = Modo.ADMIN;
         this.usuarioActual = "admin";
         this.totalOperacionesExitosas = 0;
         this.totalOperacionesFallidas = 0;
@@ -58,14 +60,72 @@ public class SistemaArchivos {
      * Inicializa la estructura de directorios del sistema
      */
     private void inicializarDirectoriosSistema() {
-        Directorio dirHome = new Directorio("home", "admin", raiz);
+        Directorio dirHome = new Directorio("home", "admin", raiz, true);
         raiz.agregarSubdirectorio(dirHome);
 
-        Directorio dirUsuarios = new Directorio("usuarios", "admin", raiz);
+        Directorio dirUsuarios = new Directorio("usuarios", "admin", raiz, true);
         raiz.agregarSubdirectorio(dirUsuarios);
 
-        Directorio dirSistema = new Directorio("sistema", "admin", raiz);
+        Directorio dirSistema = new Directorio("sistema", "admin", raiz, true);
         raiz.agregarSubdirectorio(dirSistema);
+    }
+
+    private boolean esAdmin() {
+        return modoActual == Modo.ADMIN;
+    }
+
+    /**
+     * Indica si el archivo puede ser visualizado por el usuario/modo actual.
+     */
+    public boolean puedeVerArchivo(Archivo archivo) {
+        return archivo != null && (esAdmin()
+            || archivo.isEsPublico()
+            || usuarioActual.equals(archivo.getPropietario()));
+    }
+
+    /**
+     * Indica si el directorio puede mostrarse al usuario/modo actual.
+     */
+    public boolean puedeVerDirectorio(Directorio directorio) {
+        if (directorio == null) {
+            return false;
+        }
+        if (directorio == raiz) {
+            return true;
+        }
+        return esAdmin() || directorio.isEsPublico()
+            || usuarioActual.equals(directorio.getPropietario());
+    }
+
+    /**
+     * Verifica si se puede operar sobre un archivo (leer/escribir/eliminar).
+     */
+    public boolean puedeOperarArchivo(Archivo archivo) {
+        return puedeVerArchivo(archivo);
+    }
+
+    /**
+     * Verifica si el usuario puede operar dentro de un directorio.
+     */
+    public boolean puedeOperarEnDirectorio(Directorio directorio) {
+        if (directorio == null) {
+            return false;
+        }
+        return esAdmin() || usuarioActual.equals(directorio.getPropietario())
+            || directorio.isEsPublico();
+    }
+
+    /**
+     * Devuelve los archivos visibles según permisos del modo actual.
+     */
+    public LinkedList<Archivo> obtenerArchivosVisibles() {
+        LinkedList<Archivo> visibles = new LinkedList<>();
+        for (Archivo archivo : raiz.obtenerTodosLosArchivos()) {
+            if (puedeVerArchivo(archivo)) {
+                visibles.add(archivo);
+            }
+        }
+        return visibles;
     }
 
     // ====== OPERACIONES DE DIRECTORIOS ======
@@ -94,7 +154,7 @@ public class SistemaArchivos {
      * Crea un nuevo directorio (NO requiere bloques en disco)
      */
     public boolean crearDirectorio(String nombreDirectorio) {
-        if (!modoAdministrador) {
+        if (!puedeOperarEnDirectorio(directorioActual)) {
             totalOperacionesFallidas++;
             return false;
         }
@@ -114,7 +174,7 @@ public class SistemaArchivos {
      * Elimina un directorio y su contenido
      */
     public boolean eliminarDirectorio(String nombreDirectorio) {
-        if (!modoAdministrador) {
+        if (!esAdmin()) {
             totalOperacionesFallidas++;
             return false;
         }
@@ -143,7 +203,7 @@ public class SistemaArchivos {
      */
     public boolean crearArchivo(String nombreArchivo, int tamañoBloques, boolean esPublico) {
         // Verificar permisos
-        if (!modoAdministrador) {
+        if (!puedeOperarEnDirectorio(directorioActual)) {
             totalOperacionesFallidas++;
             return false;
         }
@@ -190,8 +250,7 @@ public class SistemaArchivos {
         }
 
         // Verificar permisos de lectura
-        if (!modoAdministrador && !archivo.isEsPublico() && 
-            !archivo.getPropietario().equals(usuarioActual)) {
+        if (!puedeOperarArchivo(archivo)) {
             totalOperacionesFallidas++;
             return false;
         }
@@ -207,13 +266,13 @@ public class SistemaArchivos {
      * Actualiza un archivo (renombra)
      */
     public boolean actualizarArchivo(String nombreActual, String nombreNuevo) {
-        if (!modoAdministrador) {
+        Archivo archivo = directorioActual.buscarArchivo(nombreActual);
+        if (archivo == null) {
             totalOperacionesFallidas++;
             return false;
         }
 
-        Archivo archivo = directorioActual.buscarArchivo(nombreActual);
-        if (archivo == null) {
+        if (!puedeOperarArchivo(archivo)) {
             totalOperacionesFallidas++;
             return false;
         }
@@ -243,11 +302,6 @@ public class SistemaArchivos {
      * Elimina un archivo a partir de su ruta absoluta.
      */
     public boolean eliminarArchivoPorRuta(String rutaCompleta) {
-        if (!modoAdministrador) {
-            totalOperacionesFallidas++;
-            return false;
-        }
-
         if (rutaCompleta == null || rutaCompleta.isEmpty()) {
             totalOperacionesFallidas++;
             return false;
@@ -272,6 +326,11 @@ public class SistemaArchivos {
             return false;
         }
 
+        if (!puedeOperarArchivo(archivo)) {
+            totalOperacionesFallidas++;
+            return false;
+        }
+
         // Liberar bloques
         disco.liberarBloques(archivo);
 
@@ -290,8 +349,12 @@ public class SistemaArchivos {
     /**
      * Crea una solicitud de E/S
      */
-    private void crearSolicitudIO(SolicitudIO.TipoOperacion tipo, Archivo archivo, 
+    private void crearSolicitudIO(SolicitudIO.TipoOperacion tipo, Archivo archivo,
                                  int cilindroAcceso) {
+        if (!esAdmin() && archivo != null && !puedeOperarArchivo(archivo)) {
+            totalOperacionesFallidas++;
+            return;
+        }
         int idProceso = contadorProcesos++;
         Proceso proceso = new Proceso(idProceso, usuarioActual, tipo.name());
         procesos.add(proceso);
@@ -446,7 +509,7 @@ public class SistemaArchivos {
                 : Planificador.PoliticaplanificacionDisco.FIFO;
         this.planificador = new Planificador(politicaActual, totalBloquesArchivo);
         this.buffer = buffer != null ? new Buffer(totalBloquesArchivo / 4) : null;
-        this.raiz = new Directorio("root", "admin", null);
+        this.raiz = new Directorio("root", "admin", null, true);
         this.directorioActual = raiz;
         this.colaIO = new ColaIO();
         this.procesos = new LinkedList<>();
@@ -469,11 +532,18 @@ public class SistemaArchivos {
         }
 
         // Reconstruir directorios
-        for (String rutaDirectorio : directoriosLeidos) {
+        for (String directorioLinea : directoriosLeidos) {
+            if (directorioLinea == null || directorioLinea.isEmpty()) {
+                continue;
+            }
+            String[] partesDir = directorioLinea.split(";");
+            String rutaDirectorio = partesDir.length > 0 ? partesDir[0] : "/";
             if ("/".equals(rutaDirectorio)) {
                 continue;
             }
-            obtenerOCrearDirectorio(rutaDirectorio);
+            String propietarioDir = partesDir.length > 1 ? partesDir[1] : "admin";
+            boolean publicoDir = partesDir.length > 2 ? Boolean.parseBoolean(partesDir[2]) : true;
+            obtenerOCrearDirectorio(rutaDirectorio, propietarioDir, publicoDir);
         }
 
         // Reconstruir archivos
@@ -485,6 +555,8 @@ public class SistemaArchivos {
 
             String rutaArchivo = partes[0];
             int tamaño = Integer.parseInt(partes[1]);
+            String propietarioArchivo = partes.length >= 4 ? partes[3] : "admin";
+            boolean publicoArchivo = partes.length >= 5 ? Boolean.parseBoolean(partes[4]) : true;
             LinkedList<Integer> bloquesArchivo = new LinkedList<>();
             if (partes.length >= 3 && !partes[2].isEmpty()) {
                 String[] bloquesStr = partes[2].split(",");
@@ -500,8 +572,8 @@ public class SistemaArchivos {
             String rutaDirectorio = rutaArchivo.substring(0, ultimaBarra > 0 ? ultimaBarra : 1);
             String nombreArchivo = rutaArchivo.substring(ultimaBarra + 1);
 
-            Directorio directorioDestino = obtenerOCrearDirectorio(rutaDirectorio);
-            Archivo archivoCargado = new Archivo(nombreArchivo, tamaño, "admin", true);
+            Directorio directorioDestino = obtenerOCrearDirectorio(rutaDirectorio, propietarioArchivo, true);
+            Archivo archivoCargado = new Archivo(nombreArchivo, tamaño, propietarioArchivo, publicoArchivo);
             directorioDestino.agregarArchivo(archivoCargado);
 
             for (int i = 0; i < bloquesArchivo.size(); i++) {
@@ -553,7 +625,8 @@ public class SistemaArchivos {
      * Escribe la jerarquía de directorios empezando por la raíz.
      */
     private void guardarDirectorios(BufferedWriter writer, Directorio directorio) throws IOException {
-        writer.write(obtenerRuta(directorio));
+        writer.write(obtenerRuta(directorio) + ";" + directorio.getPropietario()
+            + ";" + directorio.isEsPublico());
         writer.newLine();
         for (Directorio sub : directorio.getSubdirectorios()) {
             guardarDirectorios(writer, sub);
@@ -580,6 +653,7 @@ public class SistemaArchivos {
             }
 
             writer.write(rutaArchivo + ";" + archivo.getTamañoBloques() + ";" + bloquesAsignados);
+            writer.write(";" + archivo.getPropietario() + ";" + archivo.isEsPublico());
             writer.newLine();
         }
 
@@ -637,7 +711,12 @@ public class SistemaArchivos {
      * Busca o crea los directorios necesarios para alcanzar la ruta indicada.
      */
     private Directorio obtenerOCrearDirectorio(String ruta) {
+        return obtenerOCrearDirectorio(ruta, "admin", true);
+    }
+
+    private Directorio obtenerOCrearDirectorio(String ruta, String propietario, boolean publico) {
         if (ruta == null || ruta.isEmpty() || "/".equals(ruta)) {
+            raiz.setEsPublico(true);
             return raiz;
         }
 
@@ -649,11 +728,12 @@ public class SistemaArchivos {
             }
             Directorio existente = actual.buscarSubdirectorio(nombre);
             if (existente == null) {
-                existente = new Directorio(nombre, "admin", actual);
+                existente = new Directorio(nombre, propietario, actual, publico);
                 actual.agregarSubdirectorio(existente);
             }
             actual = existente;
         }
+        actual.setEsPublico(publico);
         return actual;
     }
 
@@ -688,7 +768,11 @@ public class SistemaArchivos {
     }
 
     public boolean isModoAdministrador() {
-        return modoAdministrador;
+        return esAdmin();
+    }
+
+    public Modo getModoActual() {
+        return modoActual;
     }
 
     public String getUsuarioActual() {
@@ -706,7 +790,11 @@ public class SistemaArchivos {
     // ====== SETTERS ======
 
     public void setModoAdministrador(boolean admin) {
-        this.modoAdministrador = admin;
+        this.modoActual = admin ? Modo.ADMIN : Modo.USUARIO;
+    }
+
+    public void setModoActual(Modo modo) {
+        this.modoActual = modo;
     }
 
     public void setUsuarioActual(String usuario) {
@@ -721,7 +809,7 @@ public class SistemaArchivos {
     public String toString() {
         return "SistemaArchivos{" +
                 "usuario=" + usuarioActual +
-                ", modo=" + (modoAdministrador ? "ADMIN" : "USER") +
+                ", modo=" + (esAdmin() ? "ADMIN" : "USER") +
                 ", bloquesLibres=" + disco.getBloquesLibres() +
                 ", colaE/S=" + colaIO.getTamaño() +
                 '}';

@@ -53,6 +53,9 @@ public class PanelArbol extends JPanel {
     private void construirSubarbol(DefaultMutableTreeNode nodoParente, Directorio directorio) {
         // Agregar subdirectorios
         for (Directorio subdir : directorio.getSubdirectorios()) {
+            if (!sistema.puedeVerDirectorio(subdir)) {
+                continue;
+            }
             DefaultMutableTreeNode nodoSubdir = new DefaultMutableTreeNode(
                 new NodoReferencia(subdir, subdir.getNombre(), subdir.getNombre()));
             nodoParente.add(nodoSubdir);
@@ -61,6 +64,9 @@ public class PanelArbol extends JPanel {
 
         // Agregar archivos
         for (Archivo archivo : directorio.getArchivos()) {
+            if (!sistema.puedeVerArchivo(archivo)) {
+                continue;
+            }
             String etiqueta = archivo.getNombre() + " (" +
                             archivo.getCantidadBloquesAsignados() + " bloques)";
             DefaultMutableTreeNode nodoArchivo = new DefaultMutableTreeNode(
