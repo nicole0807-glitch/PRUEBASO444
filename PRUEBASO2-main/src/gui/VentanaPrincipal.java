@@ -287,8 +287,26 @@ public class VentanaPrincipal extends JFrame {
     }
 
     private void cargarSistema() {
-        JOptionPane.showMessageDialog(this, "Función de cargar - A implementar");
-        actualizarPantalla();
+        // Permite elegir un archivo previamente guardado y recargar el estado
+        JFileChooser selector = new JFileChooser();
+        int resultado = selector.showOpenDialog(this);
+
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            File archivoSeleccionado = selector.getSelectedFile();
+            try {
+                sistema.cargarEstado(archivoSeleccionado);
+                panelArbol.actualizar();
+                panelDisco.actualizar();
+                panelTabla.actualizar();
+                panelProcesos.actualizar();
+                actualizarPantalla();
+                JOptionPane.showMessageDialog(this, "Estado cargado correctamente.");
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this,
+                    "Error al cargar el sistema: " + e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
 }

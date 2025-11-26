@@ -1,11 +1,17 @@
 package modelo;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Clase central del sistema de archivos que integra todos los componentes
@@ -337,12 +343,165 @@ public class SistemaArchivos {
     }
 
     /**
+     * Carga el estado del sistema desde un archivo previamente guardado.
+     */
+    public void cargarEstado(File archivo) throws IOException {
+        List<String> directoriosLeidos = new ArrayList<>();
+        List<String> archivosLeidos = new ArrayList<>();
+        List<String> bloquesLeidos = new ArrayList<>();
+        Map<Integer, Integer> mapaProximos = new HashMap<>();
+
+        Planificador.PoliticaplanificacionDisco politicaLeida = null;
+        int totalBloquesArchivo = -1;
+        String seccion = "";
+        boolean leyendoBloques = false;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(archivo))) {
+            String linea;
+            while ((linea = reader.readLine()) != null) {
+                linea = linea.trim();
+                if (linea.isEmpty() || linea.startsWith("#")) {
+                    continue;
+                }
+
+                if (linea.startsWith("[")) {
+                    seccion = linea;
+                    leyendoBloques = false;
+                    continue;
+                }
+
+                switch (seccion) {
+                    case "[DISCO]":
+                        if ("bloques=".equalsIgnoreCase(linea)) {
+                            leyendoBloques = true;
+                            continue;
+                        }
+
+                        if (leyendoBloques) {
+                            bloquesLeidos.add(linea);
+                        } else if (linea.startsWith("totalBloques=")) {
+                            totalBloquesArchivo = Integer.parseInt(linea.split("=")[1]);
+                        } else if (linea.startsWith("politica=")) {
+                            String valor = linea.split("=")[1];
+                            try {
+                                politicaLeida = Planificador.PoliticaplanificacionDisco.valueOf(valor);
+                            } catch (IllegalArgumentException ignored) {
+                            }
+                        } else if (linea.startsWith("bloquesLibres=") || linea.startsWith("bloquesOcupados=")
+                                || linea.startsWith("porcentajeOcupacion=")) {
+                            // Datos derivados, no necesarios para reconstruir
+                        }
+                        break;
+                    case "[DIRECTORIOS]":
+                        directoriosLeidos.add(linea);
+                        break;
+                    case "[ARCHIVOS]":
+                        archivosLeidos.add(linea);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        if (totalBloquesArchivo <= 0) {
+            throw new IOException("Formato de archivo inválido: total de bloques no encontrado");
+        }
+
+        // Reconstruir disco y estructura base
+        this.disco = new Disco(totalBloquesArchivo);
+        Planificador.PoliticaplanificacionDisco politicaActual = politicaLeida != null
+            ? politicaLeida
+            : planificador != null
+                ? planificador.getPoliticaActual()
+                : Planificador.PoliticaplanificacionDisco.FIFO;
+        this.planificador = new Planificador(politicaActual, totalBloquesArchivo);
+        this.buffer = buffer != null ? new Buffer(totalBloquesArchivo / 4) : null;
+        this.raiz = new Directorio("root", "admin", null);
+        this.directorioActual = raiz;
+        this.colaIO = new ColaIO();
+        this.procesos = new LinkedList<>();
+        this.contadorProcesos = 0;
+        this.contadorSolicitudes = 0;
+        this.totalOperacionesExitosas = 0;
+        this.totalOperacionesFallidas = 0;
+
+        // Construir mapa de proximos para los bloques
+        for (String bloqueLinea : bloquesLeidos) {
+            String[] partes = bloqueLinea.split(";");
+            if (partes.length >= 4) {
+                try {
+                    int indice = Integer.parseInt(partes[0]);
+                    int siguiente = Integer.parseInt(partes[3]);
+                    mapaProximos.put(indice, siguiente);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        // Reconstruir directorios
+        for (String rutaDirectorio : directoriosLeidos) {
+            if ("/".equals(rutaDirectorio)) {
+                continue;
+            }
+            obtenerOCrearDirectorio(rutaDirectorio);
+        }
+
+        // Reconstruir archivos
+        for (String lineaArchivo : archivosLeidos) {
+            String[] partes = lineaArchivo.split(";");
+            if (partes.length < 2) {
+                continue;
+            }
+
+            String rutaArchivo = partes[0];
+            int tamaño = Integer.parseInt(partes[1]);
+            LinkedList<Integer> bloquesArchivo = new LinkedList<>();
+            if (partes.length >= 3 && !partes[2].isEmpty()) {
+                String[] bloquesStr = partes[2].split(",");
+                for (String b : bloquesStr) {
+                    try {
+                        bloquesArchivo.add(Integer.parseInt(b));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+
+            int ultimaBarra = rutaArchivo.lastIndexOf('/') >= 0 ? rutaArchivo.lastIndexOf('/') : 0;
+            String rutaDirectorio = rutaArchivo.substring(0, ultimaBarra > 0 ? ultimaBarra : 1);
+            String nombreArchivo = rutaArchivo.substring(ultimaBarra + 1);
+
+            Directorio directorioDestino = obtenerOCrearDirectorio(rutaDirectorio);
+            Archivo archivoCargado = new Archivo(nombreArchivo, tamaño, "admin", true);
+            directorioDestino.agregarArchivo(archivoCargado);
+
+            for (int i = 0; i < bloquesArchivo.size(); i++) {
+                int bloqueNum = bloquesArchivo.get(i);
+                archivoCargado.agregarBloque(bloqueNum);
+                Bloque bloque = disco.getBloque(bloqueNum);
+                if (bloque != null) {
+                    bloque.setOcupado(true);
+                    bloque.setPropietario(archivoCargado.getNombre());
+                    bloque.setColorAsignado(archivoCargado.getColorAsignado());
+                    int siguiente = mapaProximos.getOrDefault(bloqueNum, -1);
+                    bloque.setBloqueProximo(siguiente);
+                }
+            }
+        }
+
+        // Recalcular estado del disco
+        disco.getBloquesLibres();
+    }
+
+    /**
      * Registra las métricas del disco y el estado de cada bloque.
      */
     private void escribirEstadoDisco(BufferedWriter writer) throws IOException {
         writer.write("[DISCO]");
         writer.newLine();
         writer.write("totalBloques=" + disco.getTotalBloques());
+        writer.newLine();
+        writer.write("politica=" + planificador.getPoliticaActual());
         writer.newLine();
         writer.write("bloquesOcupados=" + disco.getBloquesOcupados());
         writer.newLine();
@@ -423,6 +582,30 @@ public class SistemaArchivos {
             }
         }
         return ruta.toString();
+    }
+
+    /**
+     * Busca o crea los directorios necesarios para alcanzar la ruta indicada.
+     */
+    private Directorio obtenerOCrearDirectorio(String ruta) {
+        if (ruta == null || ruta.isEmpty() || "/".equals(ruta)) {
+            return raiz;
+        }
+
+        String[] partes = ruta.split("/");
+        Directorio actual = raiz;
+        for (String nombre : partes) {
+            if (nombre.isEmpty()) {
+                continue;
+            }
+            Directorio existente = actual.buscarSubdirectorio(nombre);
+            if (existente == null) {
+                existente = new Directorio(nombre, "admin", actual);
+                actual.agregarSubdirectorio(existente);
+            }
+            actual = existente;
+        }
+        return actual;
     }
 
     // ====== GETTERS ======
