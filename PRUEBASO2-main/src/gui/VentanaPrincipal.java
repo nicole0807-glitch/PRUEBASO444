@@ -161,17 +161,20 @@ public class VentanaPrincipal extends JFrame {
     private void mostrarDialogoCrearDirectorio() {
         String nombre = JOptionPane.showInputDialog(this, "Nombre del directorio:");
         if (nombre != null && !nombre.isEmpty()) {
-            if (!sistema.puedeOperarEnDirectorio(sistema.getDirectorioActual())) {
+            Directorio destino = panelArbol.getDirectorioSeleccionado();
+            sistema.setDirectorioActual(destino);
+
+            if (!sistema.puedeOperarEnDirectorio(destino)) {
                 JOptionPane.showMessageDialog(this,
                     "No tiene permisos para crear en este directorio.",
                     "Permiso denegado", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            if (sistema.crearDirectorio(nombre)) {
+            if (sistema.crearDirectorio(nombre, destino)) {
                 JOptionPane.showMessageDialog(this, "Directorio creado exitosamente");
                 actualizarPantalla();
             } else {
-                JOptionPane.showMessageDialog(this, "Error al crear directorio", 
+                JOptionPane.showMessageDialog(this, "Error al crear directorio",
                     "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -199,18 +202,21 @@ public class VentanaPrincipal extends JFrame {
                 int tamaño = Integer.parseInt(tamañoField.getText());
                 boolean esPublico = publico.isSelected();
 
-                if (!sistema.puedeOperarEnDirectorio(sistema.getDirectorioActual())) {
+                Directorio destino = panelArbol.getDirectorioSeleccionado();
+                sistema.setDirectorioActual(destino);
+
+                if (!sistema.puedeOperarEnDirectorio(destino)) {
                     JOptionPane.showMessageDialog(this,
                         "No tiene permisos para crear en este directorio.",
                         "Permiso denegado", JOptionPane.WARNING_MESSAGE);
                     return;
                 }
 
-                if (sistema.crearArchivo(nombre, tamaño, esPublico)) {
+                if (sistema.crearArchivo(nombre, tamaño, esPublico, destino)) {
                     JOptionPane.showMessageDialog(this, "Archivo creado exitosamente");
                     actualizarPantalla();
                 } else {
-                    JOptionPane.showMessageDialog(this, 
+                    JOptionPane.showMessageDialog(this,
                         "Error al crear archivo. Verifique el espacio disponible.",
                         "Error", JOptionPane.ERROR_MESSAGE);
                 }
@@ -226,9 +232,9 @@ public class VentanaPrincipal extends JFrame {
      */
     private void eliminarArchivoSeleccionado() {
         Archivo archivoSeleccionado = panelArbol.getArchivoSeleccionado();
-        String rutaSeleccionada = panelArbol.getRutaArchivoSeleccionado();
+        Directorio directorioSeleccionado = panelArbol.getDirectorioSeleccionado();
 
-        if (archivoSeleccionado == null || rutaSeleccionada == null) {
+        if (archivoSeleccionado == null || directorioSeleccionado == null) {
             JOptionPane.showMessageDialog(this,
                 "Seleccione un archivo en el árbol para eliminarlo.");
             return;
@@ -241,7 +247,7 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
-        boolean eliminado = sistema.eliminarArchivoPorRuta(rutaSeleccionada);
+        boolean eliminado = sistema.eliminarArchivo(directorioSeleccionado, archivoSeleccionado);
         if (eliminado) {
             JOptionPane.showMessageDialog(this, "Archivo eliminado exitosamente");
             actualizarPantalla();

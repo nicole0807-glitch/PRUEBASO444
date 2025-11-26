@@ -154,18 +154,26 @@ public class SistemaArchivos {
      * Crea un nuevo directorio (NO requiere bloques en disco)
      */
     public boolean crearDirectorio(String nombreDirectorio) {
-        if (!puedeOperarEnDirectorio(directorioActual)) {
+        return crearDirectorio(nombreDirectorio, directorioActual);
+    }
+
+    /**
+     * Crea un directorio en el directorio destino indicado.
+     */
+    public boolean crearDirectorio(String nombreDirectorio, Directorio destino) {
+        Directorio objetivo = destino != null ? destino : raiz;
+        if (!puedeOperarEnDirectorio(objetivo)) {
             totalOperacionesFallidas++;
             return false;
         }
 
-        if (directorioActual.buscarSubdirectorio(nombreDirectorio) != null) {
+        if (objetivo.buscarSubdirectorio(nombreDirectorio) != null) {
             totalOperacionesFallidas++;
             return false;
         }
 
-        Directorio nuevoDirectorio = new Directorio(nombreDirectorio, usuarioActual, directorioActual);
-        directorioActual.agregarSubdirectorio(nuevoDirectorio);
+        Directorio nuevoDirectorio = new Directorio(nombreDirectorio, usuarioActual, objetivo);
+        objetivo.agregarSubdirectorio(nuevoDirectorio);
         totalOperacionesExitosas++;
         return true;
     }
@@ -202,14 +210,24 @@ public class SistemaArchivos {
      * Crea un archivo en el directorio actual
      */
     public boolean crearArchivo(String nombreArchivo, int tamañoBloques, boolean esPublico) {
+        return crearArchivo(nombreArchivo, tamañoBloques, esPublico, directorioActual);
+    }
+
+    /**
+     * Crea un archivo en el directorio indicado.
+     */
+    public boolean crearArchivo(String nombreArchivo, int tamañoBloques, boolean esPublico,
+                                Directorio destino) {
+        Directorio objetivo = destino != null ? destino : raiz;
+
         // Verificar permisos
-        if (!puedeOperarEnDirectorio(directorioActual)) {
+        if (!puedeOperarEnDirectorio(objetivo)) {
             totalOperacionesFallidas++;
             return false;
         }
 
         // Verificar si ya existe
-        if (directorioActual.buscarArchivo(nombreArchivo) != null) {
+        if (objetivo.buscarArchivo(nombreArchivo) != null) {
             totalOperacionesFallidas++;
             return false;
         }
@@ -225,10 +243,10 @@ public class SistemaArchivos {
 
         // Asignar bloques
         if (disco.asignarBloques(nuevoArchivo)) {
-            directorioActual.agregarArchivo(nuevoArchivo);
+            objetivo.agregarArchivo(nuevoArchivo);
 
             // Crear solicitud de E/S
-            crearSolicitudIO(SolicitudIO.TipoOperacion.CREAR, nuevoArchivo, 
+            crearSolicitudIO(SolicitudIO.TipoOperacion.CREAR, nuevoArchivo,
                            disco.obtenerPrimerBloqueLibre());
 
             totalOperacionesExitosas++;
@@ -331,14 +349,38 @@ public class SistemaArchivos {
             return false;
         }
 
-        // Liberar bloques
-        disco.liberarBloques(archivo);
+        return eliminarArchivo(directorioDestino, archivo);
+    }
 
-        // Remover de directorios
-        directorioDestino.removerArchivo(archivo);
+    /**
+     * Elimina el archivo indicado del directorio proporcionado, liberando sus bloques.
+     */
+    public boolean eliminarArchivo(Directorio directorio, Archivo archivo) {
+        Directorio directorioDestino = directorio != null ? directorio : raiz;
+        if (archivo == null) {
+            totalOperacionesFallidas++;
+            return false;
+        }
+
+        Archivo archivoEnDirectorio = directorioDestino.buscarArchivo(archivo.getNombre());
+        if (archivoEnDirectorio == null) {
+            totalOperacionesFallidas++;
+            return false;
+        }
+
+        if (!puedeOperarArchivo(archivoEnDirectorio)) {
+            totalOperacionesFallidas++;
+            return false;
+        }
+
+        // Liberar bloques
+        disco.liberarBloques(archivoEnDirectorio);
+
+        // Remover de directorio
+        directorioDestino.removerArchivo(archivoEnDirectorio);
 
         // Crear solicitud de E/S
-        crearSolicitudIO(SolicitudIO.TipoOperacion.ELIMINAR, archivo, -1);
+        crearSolicitudIO(SolicitudIO.TipoOperacion.ELIMINAR, archivoEnDirectorio, -1);
 
         totalOperacionesExitosas++;
         return true;
@@ -799,6 +841,13 @@ public class SistemaArchivos {
 
     public void setUsuarioActual(String usuario) {
         this.usuarioActual = usuario;
+    }
+
+    /**
+     * Ajusta el directorio actual usado para operaciones de creación/eliminación.
+     */
+    public void setDirectorioActual(Directorio directorioActual) {
+        this.directorioActual = directorioActual != null ? directorioActual : raiz;
     }
 
     public void setPoliticaPlanificacion(Planificador.PoliticaplanificacionDisco politica) {
