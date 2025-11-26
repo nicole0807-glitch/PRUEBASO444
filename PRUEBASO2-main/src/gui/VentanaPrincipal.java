@@ -90,7 +90,7 @@ public class VentanaPrincipal extends JFrame {
 
         crearDirectorio.addActionListener(e -> mostrarDialogoCrearDirectorio());
         crearArchivo.addActionListener(e -> mostrarDialogoCrearArchivo());
-        eliminarArchivo.addActionListener(e -> mostrarDialogoEliminarArchivo());
+        eliminarArchivo.addActionListener(e -> eliminarArchivoSeleccionado());
 
         menuEdicion.add(crearDirectorio);
         menuEdicion.add(crearArchivo);
@@ -208,16 +208,26 @@ public class VentanaPrincipal extends JFrame {
         }
     }
 
-    private void mostrarDialogoEliminarArchivo() {
-        String nombre = JOptionPane.showInputDialog(this, "Nombre del archivo a eliminar:");
-        if (nombre != null && !nombre.isEmpty()) {
-            if (sistema.eliminarArchivo(nombre)) {
-                JOptionPane.showMessageDialog(this, "Archivo eliminado exitosamente");
-                actualizarPantalla();
-            } else {
-                JOptionPane.showMessageDialog(this, "Error al eliminar archivo", 
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            }
+    /**
+     * Elimina el archivo actualmente seleccionado en la interfaz (árbol o tabla).
+     */
+    private void eliminarArchivoSeleccionado() {
+        Archivo archivoSeleccionado = panelArbol.getArchivoSeleccionado();
+        String rutaSeleccionada = panelArbol.getRutaArchivoSeleccionado();
+
+        if (archivoSeleccionado == null || rutaSeleccionada == null) {
+            JOptionPane.showMessageDialog(this,
+                "Seleccione un archivo en el árbol para eliminarlo.");
+            return;
+        }
+
+        boolean eliminado = sistema.eliminarArchivoPorRuta(rutaSeleccionada);
+        if (eliminado) {
+            JOptionPane.showMessageDialog(this, "Archivo eliminado exitosamente");
+            actualizarPantalla();
+        } else {
+            JOptionPane.showMessageDialog(this, "Error al eliminar archivo",
+                "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

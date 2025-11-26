@@ -232,12 +232,41 @@ public class SistemaArchivos {
      * Elimina un archivo
      */
     public boolean eliminarArchivo(String nombreArchivo) {
+        String rutaActual = obtenerRuta(directorioActual);
+        if (!"/".equals(rutaActual)) {
+            rutaActual += "/";
+        }
+        return eliminarArchivoPorRuta(rutaActual + nombreArchivo);
+    }
+
+    /**
+     * Elimina un archivo a partir de su ruta absoluta.
+     */
+    public boolean eliminarArchivoPorRuta(String rutaCompleta) {
         if (!modoAdministrador) {
             totalOperacionesFallidas++;
             return false;
         }
 
-        Archivo archivo = directorioActual.buscarArchivo(nombreArchivo);
+        if (rutaCompleta == null || rutaCompleta.isEmpty()) {
+            totalOperacionesFallidas++;
+            return false;
+        }
+
+        String rutaNormalizada = rutaCompleta.startsWith("/")
+            ? rutaCompleta
+            : "/" + rutaCompleta;
+        int ultimaBarra = rutaNormalizada.lastIndexOf('/') >= 0 ? rutaNormalizada.lastIndexOf('/') : 0;
+        String rutaDirectorio = rutaNormalizada.substring(0, ultimaBarra > 0 ? ultimaBarra : 1);
+        String nombreArchivo = rutaNormalizada.substring(ultimaBarra + 1);
+
+        Directorio directorioDestino = obtenerDirectorioPorRuta(rutaDirectorio);
+        if (directorioDestino == null) {
+            totalOperacionesFallidas++;
+            return false;
+        }
+
+        Archivo archivo = directorioDestino.buscarArchivo(nombreArchivo);
         if (archivo == null) {
             totalOperacionesFallidas++;
             return false;
@@ -247,7 +276,7 @@ public class SistemaArchivos {
         disco.liberarBloques(archivo);
 
         // Remover de directorios
-        directorioActual.removerArchivo(archivo);
+        directorioDestino.removerArchivo(archivo);
 
         // Crear solicitud de E/S
         crearSolicitudIO(SolicitudIO.TipoOperacion.ELIMINAR, archivo, -1);
@@ -582,6 +611,26 @@ public class SistemaArchivos {
             }
         }
         return ruta.toString();
+    }
+
+    private Directorio obtenerDirectorioPorRuta(String ruta) {
+        if (ruta == null || ruta.isEmpty() || "/".equals(ruta)) {
+            return raiz;
+        }
+
+        String[] partes = ruta.split("/");
+        Directorio actual = raiz;
+        for (String nombre : partes) {
+            if (nombre.isEmpty()) {
+                continue;
+            }
+            Directorio siguiente = actual.buscarSubdirectorio(nombre);
+            if (siguiente == null) {
+                return null;
+            }
+            actual = siguiente;
+        }
+        return actual;
     }
 
     /**
