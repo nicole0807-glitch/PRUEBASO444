@@ -126,10 +126,12 @@ public class Disco {
     }
 
     public int getBloquesOcupados() {
+        recalcularEstado();
         return bloquesOcupados;
     }
 
     public int getBloquesLibres() {
+        recalcularEstado();
         return bloquesLibres;
     }
 
@@ -151,7 +153,20 @@ public class Disco {
      * Calcula el porcentaje de ocupación del disco
      */
     public double getPercentajeOcupacion() {
+        recalcularEstado();
         return (double) bloquesOcupados / totalBloques * 100;
+    }
+
+    private void recalcularEstado() {
+        int ocupados = 0;
+        for (Bloque bloque : bloques) {
+            if (bloque.isOcupado()) {
+                ocupados++;
+            }
+        }
+
+        bloquesOcupados = ocupados;
+        bloquesLibres = totalBloques - ocupados;
     }
 
     @Override
