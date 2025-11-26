@@ -57,6 +57,8 @@ public class VentanaPrincipal extends JFrame {
         JPanel panelInferior = crearPanelInferior();
         add(panelInferior, BorderLayout.SOUTH);
 
+        actualizarPantalla();
+
         setVisible(true);
     }
 
@@ -270,6 +272,7 @@ public class VentanaPrincipal extends JFrame {
 
     private void cargarSistema() {
         JOptionPane.showMessageDialog(this, "Función de cargar - A implementar");
+        actualizarPantalla();
     }
 
 }
