@@ -1,6 +1,11 @@
 package modelo;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.LinkedList;
+import java.util.Locale;
 
 /**
  * Clase central del sistema de archivos que integra todos los componentes
@@ -309,6 +314,115 @@ public class SistemaArchivos {
                 }
             }
         }
+    }
+
+    /**
+     * Guarda una representación simple del estado actual del sistema en un archivo de texto.
+     */
+    public void guardarEstado(File archivo) throws IOException {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(archivo))) {
+            writer.write("# Estado del sistema de archivos");
+            writer.newLine();
+
+            escribirEstadoDisco(writer);
+            writer.newLine();
+            writer.write("[DIRECTORIOS]");
+            writer.newLine();
+            guardarDirectorios(writer, raiz);
+            writer.newLine();
+            writer.write("[ARCHIVOS]");
+            writer.newLine();
+            guardarArchivos(writer, raiz);
+        }
+    }
+
+    /**
+     * Registra las métricas del disco y el estado de cada bloque.
+     */
+    private void escribirEstadoDisco(BufferedWriter writer) throws IOException {
+        writer.write("[DISCO]");
+        writer.newLine();
+        writer.write("totalBloques=" + disco.getTotalBloques());
+        writer.newLine();
+        writer.write("bloquesOcupados=" + disco.getBloquesOcupados());
+        writer.newLine();
+        writer.write("bloquesLibres=" + disco.getBloquesLibres());
+        writer.newLine();
+        writer.write("porcentajeOcupacion=" + String.format(Locale.US, "%.2f", disco.getPercentajeOcupacion()));
+        writer.newLine();
+        writer.write("bloques=");
+        writer.newLine();
+        for (int i = 0; i < disco.getTotalBloques(); i++) {
+            Bloque bloque = disco.getBloque(i);
+            String estado = bloque.isOcupado() ? "OCUPADO" : "LIBRE";
+            String propietario = bloque.isOcupado() ? bloque.getPropietario() : "-";
+            writer.write(i + ";" + estado + ";" + propietario + ";" + bloque.getBloqueProximo());
+            writer.newLine();
+        }
+    }
+
+    /**
+     * Escribe la jerarquía de directorios empezando por la raíz.
+     */
+    private void guardarDirectorios(BufferedWriter writer, Directorio directorio) throws IOException {
+        writer.write(obtenerRuta(directorio));
+        writer.newLine();
+        for (Directorio sub : directorio.getSubdirectorios()) {
+            guardarDirectorios(writer, sub);
+        }
+    }
+
+    /**
+     * Registra los archivos con su ruta completa, tamaño y bloques asignados.
+     */
+    private void guardarArchivos(BufferedWriter writer, Directorio directorio) throws IOException {
+        for (Archivo archivo : directorio.getArchivos()) {
+            String rutaDirectorio = obtenerRuta(directorio);
+            String rutaArchivo = "/".equals(rutaDirectorio)
+                ? rutaDirectorio + archivo.getNombre()
+                : rutaDirectorio + "/" + archivo.getNombre();
+
+            StringBuilder bloquesAsignados = new StringBuilder();
+            LinkedList<Integer> bloques = archivo.getBloques();
+            for (int i = 0; i < bloques.size(); i++) {
+                bloquesAsignados.append(bloques.get(i));
+                if (i < bloques.size() - 1) {
+                    bloquesAsignados.append(",");
+                }
+            }
+
+            writer.write(rutaArchivo + ";" + archivo.getTamañoBloques() + ";" + bloquesAsignados);
+            writer.newLine();
+        }
+
+        for (Directorio sub : directorio.getSubdirectorios()) {
+            guardarArchivos(writer, sub);
+        }
+    }
+
+    /**
+     * Construye la ruta absoluta de un directorio dentro de la jerarquía.
+     */
+    private String obtenerRuta(Directorio directorio) {
+        if (directorio.getPadreDirectorio() == null) {
+            return "/";
+        }
+
+        LinkedList<String> partes = new LinkedList<>();
+        Directorio actual = directorio;
+        while (actual != null && actual.getPadreDirectorio() != null) {
+            partes.addFirst(actual.getNombre());
+            actual = actual.getPadreDirectorio();
+        }
+
+        StringBuilder ruta = new StringBuilder("/");
+        for (int i = 0; i < partes.size(); i++) {
+            ruta.append(partes.get(i));
+            if (i < partes.size() - 1) {
+                ruta.append("/");
+            }
+        }
+        return ruta.toString();
     }
 
     // ====== GETTERS ======
